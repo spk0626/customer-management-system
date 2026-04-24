@@ -1,0 +1,22 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: customer_mgmt
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    depends_on:
+      - mariadb
+    ports:
+      - "8082:8080"
+
+volumes:
+  mariadb_data:
