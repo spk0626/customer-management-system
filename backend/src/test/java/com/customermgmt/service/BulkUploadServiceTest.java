@@ -8,6 +8,7 @@ import com.customermgmt.mapper.BulkUploadJobMapper;
 import com.customermgmt.repository.BulkUploadJobRepository;
 import com.customermgmt.repository.CustomerRepository;
 import com.customermgmt.service.impl.BulkUploadServiceImpl;
+import com.customermgmt.service.impl.BulkUploadAsyncStarter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ class BulkUploadServiceTest {
     @Mock private BulkUploadJobRepository jobRepository;
     @Mock private CustomerRepository customerRepository;
     @Mock private BulkUploadJobMapper jobMapper;
+    @Mock private BulkUploadAsyncStarter bulkUploadAsyncStarter;
 
     // Use the concrete impl — @InjectMocks needs a concrete class, not an interface
     @InjectMocks
@@ -98,8 +100,8 @@ class BulkUploadServiceTest {
             .build();
 
         when(jobRepository.save(any(BulkUploadJob.class))).thenReturn(savedJob);
-        when(jobRepository.findById(1L)).thenReturn(Optional.of(savedJob));
         when(jobMapper.toResponse(savedJob)).thenReturn(expectedResponse);
+        doNothing().when(bulkUploadAsyncStarter).startProcessing(any(Long.class), any(byte[].class));
 
         BulkJobResponse result = bulkUploadService.submitBulkUpload(file);
 
@@ -107,6 +109,7 @@ class BulkUploadServiceTest {
         assertThat(result.getStatus()).isEqualTo(BulkUploadJob.Status.PENDING);
         // Job must be persisted before async processing begins
         verify(jobRepository).save(any(BulkUploadJob.class));
+        verify(bulkUploadAsyncStarter).startProcessing(eq(1L), any(byte[].class));
     }
 
     // ------------------------------------------------------------------

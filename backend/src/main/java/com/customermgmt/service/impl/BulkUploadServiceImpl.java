@@ -8,6 +8,7 @@ import com.customermgmt.mapper.BulkUploadJobMapper;
 import com.customermgmt.repository.BulkUploadJobRepository;
 import com.customermgmt.repository.CustomerRepository;
 import com.customermgmt.service.BulkUploadService;
+import com.customermgmt.service.impl.BulkUploadAsyncStarter;
 import com.customermgmt.util.ExcelRowHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class BulkUploadServiceImpl implements BulkUploadService {
     private final BulkUploadJobRepository jobRepository;
     private final CustomerRepository customerRepository;
     private final BulkUploadJobMapper jobMapper;
+    private final BulkUploadAsyncStarter asyncStarter;
 
     @Value("${bulk.processing.chunk-size:500}")
     private int chunkSize;
@@ -63,7 +65,7 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         BulkUploadJob savedJob = jobRepository.save(job);
 
         // Kick off async — returns immediately to caller
-        processAsync(savedJob.getId(), fileBytes);
+        asyncStarter.startProcessing(savedJob.getId(), fileBytes);
 
         return jobMapper.toResponse(savedJob);
     }
@@ -90,7 +92,6 @@ public class BulkUploadServiceImpl implements BulkUploadService {
      * Rows are collected into chunks and flushed to DB with JDBC batch inserts,
      * keeping transaction scope small and GC pressure low.
      */
-    @Async("bulkTaskExecutor")
     public void processAsync(Long jobId, byte[] fileBytes) {
         BulkUploadJob job = jobRepository.findById(jobId).orElseThrow();
         job.setStatus(BulkUploadJob.Status.PROCESSING);

@@ -24,6 +24,8 @@ public class CustomerRequest {
     @Size(max = 255)
     private String email;
 
+    @NotBlank(message = "NIC number is required")
+    @Size(max = 20)
     private String nicNumber;
     private LocalDate dateOfBirth;
 
