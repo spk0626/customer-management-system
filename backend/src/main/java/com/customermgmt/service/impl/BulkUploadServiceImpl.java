@@ -13,8 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.xssf.eventusermodel.XSSFReader;
-import org.apache.poi.xssf.eventusermodel.XSSFSharedStringsTable;
-import org.apache.poi.xssf.eventusermodel.XSSFStylesTable;
+import org.apache.poi.xssf.model.SharedStrings;
+import org.apache.poi.xssf.model.StylesTable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -104,8 +104,8 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes)) {
             OPCPackage pkg = OPCPackage.open(is);
             XSSFReader reader = new XSSFReader(pkg);
-            XSSFSharedStringsTable sst = new XSSFSharedStringsTable(pkg);
-            XSSFStylesTable styles = reader.getStylesTable();
+            SharedStrings sst = reader.getSharedStringsTable();
+            StylesTable styles = reader.getStylesTable();
 
             XMLReader xmlReader = SAXParserFactory.newInstance().newSAXParser().getXMLReader();
             ExcelRowHandler handler = new ExcelRowHandler(sst, styles, row -> {

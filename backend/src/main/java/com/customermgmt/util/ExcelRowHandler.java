@@ -1,7 +1,7 @@
 package com.customermgmt.util;
 
-import org.apache.poi.xssf.eventusermodel.XSSFSharedStringsTable;
-import org.apache.poi.xssf.eventusermodel.XSSFStylesTable;
+import org.apache.poi.xssf.model.SharedStrings;
+import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
@@ -25,8 +25,8 @@ import java.util.function.Consumer;
  */
 public class ExcelRowHandler extends DefaultHandler {
 
-    private final XSSFSharedStringsTable sharedStrings;
-    private final XSSFStylesTable styles;
+    private final SharedStrings sharedStrings;
+    private final StylesTable styles;
     private final Consumer<String[]> rowConsumer;
 
     private final StringBuilder cellValue = new StringBuilder();
@@ -35,8 +35,8 @@ public class ExcelRowHandler extends DefaultHandler {
     private boolean inlineString = false;
     private boolean isSharedString = false;
 
-    public ExcelRowHandler(XSSFSharedStringsTable sharedStrings,
-                           XSSFStylesTable styles,
+    public ExcelRowHandler(SharedStrings sharedStrings,
+                           StylesTable styles,
                            Consumer<String[]> rowConsumer) {
         this.sharedStrings = sharedStrings;
         this.styles = styles;
