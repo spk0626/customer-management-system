@@ -5,13 +5,11 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import javax.persistence.*;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -42,10 +40,10 @@ public class Customer {
     private boolean active = true;
 
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<CustomerMobile> mobileNumbers = new ArrayList<>();
+    private Set<CustomerMobile> mobileNumbers = new HashSet<>();
 
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<CustomerAddress> addresses = new ArrayList<>();
+    private Set<CustomerAddress> addresses = new HashSet<>();
 
     /**
      * Family members - stored as a join table to avoid circular foreign keys.

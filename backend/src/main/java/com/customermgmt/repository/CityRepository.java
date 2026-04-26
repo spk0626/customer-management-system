@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -13,4 +14,9 @@ public interface CityRepository extends JpaRepository<City, Long> {
 
     @Query("SELECT c FROM City c JOIN FETCH c.country WHERE LOWER(c.name) = LOWER(:name)")
     Optional<City> findByNameIgnoreCase(@Param("name") String name);
+
+    @Query("SELECT c FROM City c JOIN FETCH c.country ct " +
+           "WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "ORDER BY c.name ASC")
+    List<City> searchByNameIgnoreCase(@Param("query") String query);
 }

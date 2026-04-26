@@ -13,7 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
+import javax.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -25,7 +25,7 @@ public class CustomerController {
 
     /**
      * GET /api/v1/customers?page=0&size=20&sort=name,asc
-     * Returns paginated list for table view.
+     * Returns the paginated customer list used by the table view.
      */
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> getAllCustomers(
@@ -45,7 +45,7 @@ public class CustomerController {
 
     /**
      * GET /api/v1/customers/{id}
-     * Returns full customer detail including mobiles, addresses, family members.
+     * Returns full customer detail including mobiles, addresses, and family members.
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<CustomerResponse>> getCustomer(@PathVariable Long id) {
@@ -54,7 +54,7 @@ public class CustomerController {
 
     /**
      * GET /api/v1/customers/search?q=somename
-     * Lightweight search for family member selector.
+     * Lightweight search used by the family-member selector.
      */
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<CustomerResponse>>> searchCustomers(
@@ -62,9 +62,6 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.ok(customerService.searchCustomers(q)));
     }
 
-    /**
-     * POST /api/v1/customers
-     */
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerResponse>> createCustomer(
             @Valid @RequestBody CustomerRequest request) {
@@ -72,9 +69,6 @@ public class CustomerController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Customer created successfully", created));
     }
 
-    /**
-     * PUT /api/v1/customers/{id}
-     */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<CustomerResponse>> updateCustomer(
             @PathVariable Long id,
@@ -85,7 +79,7 @@ public class CustomerController {
 
     /**
      * DELETE /api/v1/customers/{id}
-     * Soft delete — sets is_active = false.
+     * Soft delete by setting is_active to false.
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteCustomer(@PathVariable Long id) {

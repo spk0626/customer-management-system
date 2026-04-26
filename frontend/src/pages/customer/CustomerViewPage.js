@@ -9,29 +9,42 @@ const formatDate = (value) => {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
-export default function CustomerViewPage({ notify }) {
+export default function CustomerViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     customerApi.getById(id)
-      .then(res => setCustomer(res.data.data))
-      .catch(() => notify('Unable to load customer details.', 'error'));
-  }, [id, notify]);
+      .then(res => {
+        setCustomer(res.data.data);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
+  }, [id]);
 
-  if (!customer) {
+  if (!customer && !loadFailed) {
     return (
       <div className="container" style={{ padding: '3rem 2rem', maxWidth: '900px', margin: '0 auto' }}>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700 }}>← Return to Directory</button>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700 }}>&larr; Return to Directory</button>
         <div style={{ background: 'white', borderRadius: '18px', padding: '3rem', border: '1px solid #dbe7e3', textAlign: 'center', color: '#64748b' }}>Loading customer details...</div>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="container" style={{ padding: '3rem 2rem', maxWidth: '900px', margin: '0 auto' }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700 }}>&larr; Return to Directory</button>
+        <div style={{ background: 'white', borderRadius: '18px', padding: '3rem', border: '1px solid #dbe7e3', textAlign: 'center', color: '#64748b' }}>Customer details could not be loaded.</div>
       </div>
     );
   }
 
   return (
     <div className="container" style={{ padding: '3rem 2rem', maxWidth: '980px', margin: '0 auto' }}>
-      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700 }}>← Return to Directory</button>
+      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700 }}>&larr; Return to Directory</button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0f172a', margin: 0 }}>{customer.name}</h1>
@@ -47,7 +60,6 @@ export default function CustomerViewPage({ notify }) {
         <section style={{ background: 'white', borderRadius: '18px', padding: '1.5rem', border: '1px solid #dbe7e3', boxShadow: '0 14px 40px -24px rgba(4, 120, 87, 0.35)' }}>
           <h2 style={{ marginTop: 0, color: '#047857' }}>Profile</h2>
           <div style={{ display: 'grid', gap: '0.85rem', color: '#334155' }}>
-            <div><strong>Email:</strong> {customer.email || 'Not provided'}</div>
             <div><strong>Date of birth:</strong> {formatDate(customer.dateOfBirth)}</div>
             <div><strong>Active:</strong> {customer.active ? 'Yes' : 'No'}</div>
           </div>
@@ -68,12 +80,12 @@ export default function CustomerViewPage({ notify }) {
           <h2 style={{ marginTop: 0, color: '#047857' }}>Addresses</h2>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {customer.addresses?.length ? customer.addresses.map(address => (
-              <div key={address.id || `${address.addressLine1}-${address.postCode}`} style={{ padding: '0.9rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontWeight: 800, color: '#0f172a' }}>{address.type || 'Address'}</div>
+              <div key={address.id || `${address.addressLine1}-${address.cityName}`} style={{ padding: '0.9rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>Address</div>
                 <div style={{ color: '#334155', marginTop: '0.35rem' }}>{address.addressLine1}</div>
                 {address.addressLine2 && <div style={{ color: '#475569' }}>{address.addressLine2}</div>}
                 <div style={{ color: '#64748b', marginTop: '0.35rem' }}>
-                  {address.postCode}{address.cityName ? `, ${address.cityName}` : ''}{address.countryName ? `, ${address.countryName}` : ''}
+                  {address.cityName ? `${address.cityName}` : ''}{address.countryName ? `, ${address.countryName}` : ''}
                 </div>
               </div>
             )) : <div style={{ color: '#64748b' }}>No addresses.</div>}

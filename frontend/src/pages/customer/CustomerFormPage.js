@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { customerApi } from '../../services/api';
+import { cityApi, customerApi } from '../../services/api';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 const createEmptyMobile = () => ({ mobileNumber: '', primary: false });
 const createEmptyAddress = () => ({
-  type: '',
   addressLine1: '',
   addressLine2: '',
-  postCode: '',
-  cityId: '',
+  cityName: '',
   primary: false,
 });
 
@@ -20,7 +18,6 @@ export default function CustomerFormPage({ notify }) {
     name: '',
     nicNumber: '',
     dateOfBirth: '',
-    email: '',
     mobileNumbers: [createEmptyMobile()],
     addresses: [createEmptyAddress()],
     familyMemberIds: [],
@@ -28,6 +25,8 @@ export default function CustomerFormPage({ notify }) {
   const [confirmSave, setConfirmSave] = useState(false);
   const [familyQuery, setFamilyQuery] = useState('');
   const [familySearchResults, setFamilySearchResults] = useState([]);
+  const [activeCityIndex, setActiveCityIndex] = useState(null);
+  const [citySearchResults, setCitySearchResults] = useState([]);
   const isEdit = !!id;
 
   const title = useMemo(() => (isEdit ? 'Update Member Profile' : 'Member Registration'), [isEdit]);
@@ -41,17 +40,14 @@ export default function CustomerFormPage({ notify }) {
             name: customer.name || '',
             nicNumber: customer.nicNumber || '',
             dateOfBirth: customer.dateOfBirth || '',
-            email: customer.email || '',
             mobileNumbers: customer.mobileNumbers?.length
               ? customer.mobileNumbers.map(mobile => ({ mobileNumber: mobile.mobileNumber || '', primary: !!mobile.primary }))
               : [createEmptyMobile()],
             addresses: customer.addresses?.length
               ? customer.addresses.map(address => ({
-                type: address.type || '',
                 addressLine1: address.addressLine1 || '',
                 addressLine2: address.addressLine2 || '',
-                postCode: address.postCode || '',
-                cityId: address.cityId || '',
+                cityName: address.cityName || '',
                 primary: !!address.primary,
               }))
               : [createEmptyAddress()],
@@ -78,24 +74,42 @@ export default function CustomerFormPage({ notify }) {
     return () => clearTimeout(timer);
   }, [familyQuery, id]);
 
+  useEffect(() => {
+    if (activeCityIndex === null) {
+      setCitySearchResults([]);
+      return undefined;
+    }
+
+    const query = form.addresses[activeCityIndex]?.cityName?.trim() || '';
+    if (query.length < 2) {
+      setCitySearchResults([]);
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      cityApi.search(query)
+        .then(res => setCitySearchResults(res.data.data || []))
+        .catch(() => setCitySearchResults([]));
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [activeCityIndex, form.addresses]);
+
   const handleSave = async () => {
     try {
       const payload = {
         name: form.name.trim(),
         nicNumber: form.nicNumber.trim(),
         dateOfBirth: form.dateOfBirth,
-        email: form.email.trim(),
         mobileNumbers: form.mobileNumbers
           .filter(item => item.mobileNumber.trim())
           .map((item, index) => ({ mobileNumber: item.mobileNumber.trim(), primary: item.primary || index === 0 })),
         addresses: form.addresses
-          .filter(item => item.addressLine1.trim())
+          .filter(item => item.addressLine1.trim() || item.addressLine2.trim() || item.cityName.trim())
           .map((item, index) => ({
-            type: item.type.trim(),
             addressLine1: item.addressLine1.trim(),
             addressLine2: item.addressLine2.trim(),
-            postCode: item.postCode.trim(),
-            cityId: item.cityId ? Number(item.cityId) : null,
+            cityName: item.cityName.trim(),
             primary: item.primary || index === 0,
           })),
         familyMemberIds: form.familyMemberIds,
@@ -109,9 +123,7 @@ export default function CustomerFormPage({ notify }) {
         notify(`New member ${form.name} has been successfully registered.`, 'success');
       }
       navigate('/');
-    } catch {
-      notify('Save failed. Please check the backend response.', 'error');
-    }
+    } catch {}
   };
 
   const inputStyle = { padding: '0.85rem', borderRadius: '10px', border: '1px solid #cbd5e1', width: '100%', marginTop: '0.5rem', fontSize: '1rem', transition: '0.2s', boxSizing: 'border-box' };
@@ -135,6 +147,12 @@ export default function CustomerFormPage({ notify }) {
     }));
   };
 
+  const selectCity = (index, city) => {
+    updateAddress(index, 'cityName', city.name);
+    setActiveCityIndex(null);
+    setCitySearchResults([]);
+  };
+
   const toggleFamilyMember = (memberId) => {
     setForm(current => {
       const exists = current.familyMemberIds.includes(memberId);
@@ -149,17 +167,13 @@ export default function CustomerFormPage({ notify }) {
 
   return (
     <div className="container" style={{ padding: '3rem 2rem', maxWidth: '650px', margin: '0 auto' }}>
-      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700, fontSize: '0.95rem' }}>← Return to Directory</button>
+      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 700, fontSize: '0.95rem' }}>&larr; Return to Directory</button>
       <h1 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '2rem', color: '#0f172a' }}>{title}</h1>
 
       <div style={{ background: 'white', padding: '2.5rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={labelStyle}>Legal Full Name</label>
           <input style={inputStyle} placeholder="Enter full name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-        </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={labelStyle}>Email Address</label>
-          <input required style={inputStyle} type="email" placeholder="email@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2.5rem' }}>
           <div>
@@ -211,16 +225,6 @@ export default function CustomerFormPage({ notify }) {
 
           {form.addresses.map((address, index) => (
             <div key={`address-${index}`} style={{ padding: '1rem', border: '1px solid #dbe7e3', borderRadius: '14px', marginBottom: '1rem', background: '#f8fffc' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={labelStyle}>Type</label>
-                  <input style={inputStyle} placeholder="Home / Work" value={address.type} onChange={e => updateAddress(index, 'type', e.target.value)} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Post Code</label>
-                  <input style={inputStyle} placeholder="10100" value={address.postCode} onChange={e => updateAddress(index, 'postCode', e.target.value)} />
-                </div>
-              </div>
               <div style={{ marginTop: '1rem' }}>
                 <label style={labelStyle}>Address Line 1</label>
                 <input style={inputStyle} placeholder="Street, building or house" value={address.addressLine1} onChange={e => updateAddress(index, 'addressLine1', e.target.value)} />
@@ -230,9 +234,42 @@ export default function CustomerFormPage({ notify }) {
                 <input style={inputStyle} placeholder="Apartment, area, landmark" value={address.addressLine2} onChange={e => updateAddress(index, 'addressLine2', e.target.value)} />
               </div>
               <div style={{ marginTop: '1rem' }}>
-                <label style={labelStyle}>City ID</label>
-                <input style={inputStyle} type="number" placeholder="Internal city master ID" value={address.cityId} onChange={e => updateAddress(index, 'cityId', e.target.value)} />
-                <div style={{ marginTop: '0.4rem', color: '#64748b', fontSize: '0.8rem' }}>City and country are resolved in the backend master data.</div>
+                <label style={labelStyle}>City</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    style={inputStyle}
+                    placeholder="Start typing a city"
+                    value={address.cityName}
+                    onChange={e => {
+                      updateAddress(index, 'cityName', e.target.value);
+                      setActiveCityIndex(index);
+                    }}
+                    onFocus={() => setActiveCityIndex(index)}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setActiveCityIndex(current => (current === index ? null : current));
+                        setCitySearchResults([]);
+                      }, 150);
+                    }}
+                  />
+                  {activeCityIndex === index && citySearchResults.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 0.4rem)', left: 0, right: 0, background: 'white', border: '1px solid #dbe7e3', borderRadius: '14px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.12)', maxHeight: '220px', overflow: 'auto', zIndex: 5 }}>
+                      {citySearchResults.map(city => (
+                        <button
+                          key={city.id}
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => selectCity(index, city)}
+                          style={{ width: '100%', textAlign: 'left', padding: '0.9rem 1rem', border: 'none', background: 'white', borderBottom: '1px solid #eff6f3', cursor: 'pointer' }}
+                        >
+                          <div style={{ fontWeight: 800, color: '#0f172a' }}>{city.name}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{city.countryName}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ marginTop: '0.4rem', color: '#64748b', fontSize: '0.8rem' }}>Country is resolved automatically from the city master data.</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginTop: '1rem' }}>
                 <label style={{ ...labelStyle, textTransform: 'none' }}>
@@ -290,7 +327,7 @@ export default function CustomerFormPage({ notify }) {
                   onClick={() => toggleFamilyMember(memberId)}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#047857', fontWeight: 900 }}
                 >
-                  ×
+                  &times;
                 </button>
               </span>
             )) : (

@@ -2,7 +2,7 @@ package com.customermgmt.entity;
 
 import lombok.*;
 
-import jakarta.persistence.*;
+import javax.persistence.*;
 
 @Entity
 @Table(name = "customer_address", indexes = {
@@ -19,14 +19,14 @@ public class CustomerAddress {
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    @Column(name = "address_line1", length = 255)
+    @Column(name = "address_line1", nullable = false, length = 255)
     private String addressLine1;
 
     @Column(name = "address_line2", length = 255)
     private String addressLine2;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "city_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "city_id", nullable = false)
     private City city;
 
     @Column(name = "is_primary", nullable = false)

@@ -12,6 +12,9 @@ public class CustomerResponse {
     private LocalDate dateOfBirth;
     private String nicNumber;
     private boolean active;
+    private Integer mobileCount;
+    private Integer addressCount;
+    private Integer familyMemberCount;
     private List<MobileResponse> mobileNumbers;
     private List<AddressResponse> addresses;
     private List<FamilyMemberResponse> familyMembers;

@@ -2,12 +2,18 @@ package com.customermgmt.entity;
 
 import lombok.*;
 
-import jakarta.persistence.*;
+import javax.persistence.*;
 
 @Entity
-@Table(name = "city", indexes = {
-    @Index(name = "idx_city_country", columnList = "country_id")
-})
+@Table(
+    name = "city",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uq_city_name_country", columnNames = {"name", "country_id"})
+    },
+    indexes = {
+        @Index(name = "idx_city_country", columnList = "country_id")
+    }
+)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class City {
 

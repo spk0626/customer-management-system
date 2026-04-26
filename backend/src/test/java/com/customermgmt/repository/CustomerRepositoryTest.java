@@ -1,11 +1,15 @@
 package com.customermgmt.repository;
 
 import com.customermgmt.entity.Customer;
+import com.customermgmt.entity.CustomerMobile;
+import com.customermgmt.repository.projection.CustomerListProjection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
@@ -95,5 +99,25 @@ class CustomerRepositoryTest {
         List<String> found = customerRepository.findExistingNics(toCheck);
         assertThat(found).containsExactlyInAnyOrder("921234567V", "881234567V");
         assertThat(found).doesNotContain("000000000X");
+    }
+
+    @Test
+    @DisplayName("findAllActive - returns related record counts for table view")
+    void findAllActive_returnsCounts() {
+        CustomerMobile mobile = new CustomerMobile();
+        mobile.setMobileNumber("0771234567");
+        mobile.setPrimary(true);
+        customer1.addMobile(mobile);
+        customerRepository.saveAndFlush(customer1);
+
+        Page<CustomerListProjection> page = customerRepository.findAllActive(PageRequest.of(0, 10));
+        CustomerListProjection result = page.getContent().stream()
+            .filter(customer -> "921234567V".equals(customer.getNicNumber()))
+            .findFirst()
+            .orElseThrow(AssertionError::new);
+
+        assertThat(result.getMobileCount()).isEqualTo(1L);
+        assertThat(result.getAddressCount()).isEqualTo(0L);
+        assertThat(result.getFamilyMemberCount()).isEqualTo(0L);
     }
 }

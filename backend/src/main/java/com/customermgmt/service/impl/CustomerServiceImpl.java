@@ -9,6 +9,7 @@ import com.customermgmt.exception.ResourceNotFoundException;
 import com.customermgmt.mapper.CustomerMapper;
 import com.customermgmt.repository.CityRepository;
 import com.customermgmt.repository.CustomerRepository;
+import com.customermgmt.repository.projection.CustomerListProjection;
 import com.customermgmt.service.CustomerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,13 +17,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true) // default read-only; write methods override below
+@Transactional(readOnly = true)
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
@@ -39,13 +42,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         Customer customer = new Customer();
         mapRequestToCustomer(request, customer);
-
         Customer saved = customerRepository.save(customer);
-        // Re-fetch with full details to return complete response in one query
-        return customerMapper.toResponse(
-            customerRepository.findByIdWithDetails(saved.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", saved.getId()))
-        );
+
+        return getCustomerById(saved.getId());
     }
 
     @Override
@@ -59,32 +58,38 @@ public class CustomerServiceImpl implements CustomerService {
                 "NIC " + request.getNicNumber() + " is already used by another customer");
         }
 
-        // Clear and rebuild child collections — orphanRemoval handles deletions
         customer.getMobileNumbers().clear();
         customer.getAddresses().clear();
-
         mapRequestToCustomer(request, customer);
 
-        // Re-fetch with full details after flush
         customerRepository.saveAndFlush(customer);
-        return customerMapper.toResponse(
-            customerRepository.findByIdWithDetails(id).orElseThrow()
-        );
+
+        return getCustomerById(id);
     }
 
     @Override
     public CustomerResponse getCustomerById(Long id) {
-        // Single query with all JOINs — no N+1
+        // Step 1: load scalars + mobiles + addresses (with city/country) in one query
         Customer customer = customerRepository.findByIdWithDetails(id)
             .orElseThrow(() -> new ResourceNotFoundException("Customer", id));
+
+        // Step 2: load familyMembers in a separate query.
+        // Hibernate's L1 cache means both queries operate on the same Customer
+        // instance — the familyMembers Set is populated on the already-loaded object.
+        // This avoids the "cannot simultaneously fetch multiple bags" HibernateException
+        // that occurs when you JOIN FETCH two List collections in one query.
+        customerRepository.findByIdWithFamilyMembers(id);
+
         return customerMapper.toResponse(customer);
     }
 
     @Override
     public PagedResponse<CustomerResponse> getAllCustomers(Pageable pageable) {
-        // Table view only needs scalar fields — no JOIN FETCH needed here
-        Page<Customer> page = customerRepository.findAllActive(pageable);
-        Page<CustomerResponse> responsePage = page.map(customerMapper::toResponse);
+        // List view: scalar fields only — no collections needed.
+        // toListResponse maps only id/name/nicNumber/dateOfBirth/active,
+        // so no lazy collections are touched and no LazyInitializationException can occur.
+        Page<CustomerListProjection> page = customerRepository.findAllActive(pageable);
+        Page<CustomerResponse> responsePage = page.map(this::toListResponse);
         return PagedResponse.from(responsePage);
     }
 
@@ -93,7 +98,6 @@ public class CustomerServiceImpl implements CustomerService {
     public void deleteCustomer(Long id) {
         Customer customer = customerRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Customer", id));
-        // Soft delete — preserves referential integrity for family member relationships
         customer.setActive(false);
         customerRepository.save(customer);
     }
@@ -103,25 +107,37 @@ public class CustomerServiceImpl implements CustomerService {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
         }
+        // Search returns shallow results — only scalar fields, safe from lazy loading
         List<Customer> customers = customerRepository.searchByNameOrNic(query.trim());
-        return customerMapper.toResponseList(customers);
+        return customerMapper.toListResponseList(customers);
     }
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Maps a CustomerRequest onto an existing (or new) Customer entity.
-     * City lookups use a single query per address — city is already in memory
-     * after first access due to first-level cache within the transaction.
-     */
+    private CustomerResponse toListResponse(CustomerListProjection customer) {
+        return CustomerResponse.builder()
+            .id(customer.getId())
+            .name(customer.getName())
+            .dateOfBirth(customer.getDateOfBirth())
+            .nicNumber(customer.getNicNumber())
+            .active(customer.isActive())
+            .mobileCount(safeCount(customer.getMobileCount()))
+            .addressCount(safeCount(customer.getAddressCount()))
+            .familyMemberCount(safeCount(customer.getFamilyMemberCount()))
+            .build();
+    }
+
+    private int safeCount(Long value) {
+        return value == null ? 0 : value.intValue();
+    }
+
     private void mapRequestToCustomer(CustomerRequest request, Customer customer) {
         customer.setName(request.getName());
         customer.setDateOfBirth(request.getDateOfBirth());
         customer.setNicNumber(request.getNicNumber());
 
-        // Mobile numbers
         if (request.getMobileNumbers() != null) {
             request.getMobileNumbers().forEach(m -> {
                 CustomerMobile mobile = new CustomerMobile();
@@ -131,30 +147,34 @@ public class CustomerServiceImpl implements CustomerService {
             });
         }
 
-        // Addresses — city lookup hits master table once per city (cached by JPA L1)
         if (request.getAddresses() != null) {
             request.getAddresses().forEach(a -> {
                 CustomerAddress address = new CustomerAddress();
                 address.setAddressLine1(a.getAddressLine1());
                 address.setAddressLine2(a.getAddressLine2());
                 address.setPrimary(a.isPrimary());
-                if (a.getCityId() != null) {
-                    City city = cityRepository.findById(a.getCityId())
-                        .orElseThrow(() -> new ResourceNotFoundException("City", a.getCityId()));
-                    address.setCity(city);
-                }
+                City city = cityRepository.findByNameIgnoreCase(a.getCityName().trim())
+                    .orElseThrow(() -> new ResourceNotFoundException("City not found: " + a.getCityName()));
+                address.setCity(city);
                 customer.addAddress(address);
             });
         }
 
-        // Family members — resolved by ID, no extra join needed
         customer.getFamilyMembers().clear();
         if (request.getFamilyMemberIds() != null) {
-            request.getFamilyMemberIds().forEach(memberId -> {
-                Customer member = customerRepository.findById(memberId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer", memberId));
-                customer.addFamilyMember(member);
+            List<Long> requestedIds = new ArrayList<>(new HashSet<>(request.getFamilyMemberIds()));
+            List<Customer> members = customerRepository.findAllById(requestedIds);
+            Set<Long> foundIds = new HashSet<>();
+
+            members.forEach(member -> foundIds.add(member.getId()));
+
+            requestedIds.forEach(memberId -> {
+                if (!foundIds.contains(memberId)) {
+                    throw new ResourceNotFoundException("Customer", memberId);
+                }
             });
+
+            members.forEach(customer::addFamilyMember);
         }
     }
 }

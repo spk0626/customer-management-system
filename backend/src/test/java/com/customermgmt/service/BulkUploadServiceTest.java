@@ -22,7 +22,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +59,19 @@ class BulkUploadServiceTest {
 
         assertThatThrownBy(() -> bulkUploadService.submitBulkUpload(csvFile))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Only Excel files");
+            .hasMessageContaining(".xlsx");
+    }
+
+    @Test
+    @DisplayName("submitBulkUpload — rejects legacy .xls files")
+    void submitBulkUpload_legacyExcel_throws() {
+        MockMultipartFile xlsFile = new MockMultipartFile(
+            "file", "data.xls", "application/vnd.ms-excel", new byte[]{1, 2, 3}
+        );
+
+        assertThatThrownBy(() -> bulkUploadService.submitBulkUpload(xlsFile))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining(".xlsx");
     }
 
     @Test
@@ -101,7 +112,7 @@ class BulkUploadServiceTest {
 
         when(jobRepository.save(any(BulkUploadJob.class))).thenReturn(savedJob);
         when(jobMapper.toResponse(savedJob)).thenReturn(expectedResponse);
-        doNothing().when(bulkUploadAsyncStarter).startProcessing(any(Long.class), any(byte[].class));
+        doNothing().when(bulkUploadAsyncStarter).startProcessing(any(Long.class), any(String.class));
 
         BulkJobResponse result = bulkUploadService.submitBulkUpload(file);
 
@@ -109,7 +120,7 @@ class BulkUploadServiceTest {
         assertThat(result.getStatus()).isEqualTo(BulkUploadJob.Status.PENDING);
         // Job must be persisted before async processing begins
         verify(jobRepository).save(any(BulkUploadJob.class));
-        verify(bulkUploadAsyncStarter).startProcessing(eq(1L), any(byte[].class));
+        verify(bulkUploadAsyncStarter).startProcessing(eq(1L), any(String.class));
     }
 
     // ------------------------------------------------------------------
@@ -120,6 +131,7 @@ class BulkUploadServiceTest {
     @DisplayName("persistChunk — skips rows with missing mandatory fields")
     void persistChunk_missingFields_countedAsFailed() {
         when(customerRepository.findExistingNics(any())).thenReturn(Collections.emptyList());
+        when(customerRepository.findByNicNumberIn(any())).thenReturn(Collections.emptyList());
         when(customerRepository.saveAll(any())).thenReturn(Collections.emptyList());
 
         int[] result = bulkUploadService.persistChunk(Arrays.asList(
@@ -145,22 +157,26 @@ class BulkUploadServiceTest {
         existing.setNicNumber("901234567V");
         existing.setDateOfBirth(java.time.LocalDate.of(1990, 1, 1));
 
-        when(customerRepository.findByNicNumber("901234567V"))
-            .thenReturn(Optional.of(existing));
-        when(customerRepository.save(any())).thenReturn(existing);
+        when(customerRepository.findByNicNumberIn(any()))
+            .thenReturn(Collections.singletonList(existing));
+        when(customerRepository.saveAll(any())).thenReturn(Collections.emptyList());
 
         int[] result = bulkUploadService.persistChunk(Collections.singletonList(
             new String[]{"Updated Name", "1990-05-15", "901234567V"}
         ));
 
         assertThat(result[0]).isEqualTo(1); // counted as success (upsert)
-        verify(customerRepository).save(argThat(c -> "Updated Name".equals(c.getName())));
+        verify(customerRepository, atLeastOnce()).saveAll(argThat(customers ->
+            ((java.util.List<Customer>) customers).stream()
+                .anyMatch(customer -> "Updated Name".equals(customer.getName()))
+        ));
     }
 
     @Test
     @DisplayName("persistChunk — batch-inserts new customers as a group (not one-by-one)")
     void persistChunk_newCustomers_batchInserted() {
         when(customerRepository.findExistingNics(any())).thenReturn(Collections.emptyList());
+        when(customerRepository.findByNicNumberIn(any())).thenReturn(Collections.emptyList());
         when(customerRepository.saveAll(any())).thenReturn(Collections.emptyList());
 
         bulkUploadService.persistChunk(Arrays.asList(

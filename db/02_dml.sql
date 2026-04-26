@@ -30,25 +30,29 @@ INSERT INTO city (name, country_id) VALUES
 ('Negombo',     (SELECT id FROM country WHERE code = 'LKA')),
 ('Matara',      (SELECT id FROM country WHERE code = 'LKA')),
 ('Kurunegala',  (SELECT id FROM country WHERE code = 'LKA')),
-('Anuradhapura',(SELECT id FROM country WHERE code = 'LKA'));
+('Anuradhapura',(SELECT id FROM country WHERE code = 'LKA'))
+ON DUPLICATE KEY UPDATE country_id = VALUES(country_id);
 
 -- Cities — India
 INSERT INTO city (name, country_id) VALUES
 ('Mumbai',      (SELECT id FROM country WHERE code = 'IND')),
 ('Delhi',       (SELECT id FROM country WHERE code = 'IND')),
 ('Bangalore',   (SELECT id FROM country WHERE code = 'IND')),
-('Chennai',     (SELECT id FROM country WHERE code = 'IND'));
+('Chennai',     (SELECT id FROM country WHERE code = 'IND'))
+ON DUPLICATE KEY UPDATE country_id = VALUES(country_id);
 
 -- Cities — UK
 INSERT INTO city (name, country_id) VALUES
 ('London',      (SELECT id FROM country WHERE code = 'GBR')),
-('Manchester',  (SELECT id FROM country WHERE code = 'GBR'));
+('Manchester',  (SELECT id FROM country WHERE code = 'GBR'))
+ON DUPLICATE KEY UPDATE country_id = VALUES(country_id);
 
 -- Cities — other
 INSERT INTO city (name, country_id) VALUES
 ('New York',    (SELECT id FROM country WHERE code = 'USA')),
 ('Sydney',      (SELECT id FROM country WHERE code = 'AUS')),
-('Singapore',   (SELECT id FROM country WHERE code = 'SGP'));
+('Singapore',   (SELECT id FROM country WHERE code = 'SGP'))
+ON DUPLICATE KEY UPDATE country_id = VALUES(country_id);
 
 -- -------------------------------------------------------------
 -- Sample customers

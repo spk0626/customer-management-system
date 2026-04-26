@@ -14,10 +14,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CustomerControllerTest {
 
     @Autowired private MockMvc mockMvc;
-    @MockitoBean private CustomerService customerService;
+    @MockBean private CustomerService customerService;
 
     // Build ObjectMapper manually so it handles LocalDate correctly.
     // @WebMvcTest does NOT auto-configure the full Spring context, so we
@@ -52,7 +52,6 @@ class CustomerControllerTest {
     void setUp() {
         validRequest = CustomerRequest.builder()
             .name("Sunil Fernando")
-            .email("sunil.fernando@example.com")
             .dateOfBirth(LocalDate.of(1985, 3, 20))
             .nicNumber("851234567V")
             .mobileNumbers(Collections.emptyList())

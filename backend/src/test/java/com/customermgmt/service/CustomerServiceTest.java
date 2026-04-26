@@ -44,7 +44,6 @@ class CustomerServiceTest {
     void setUp() {
         validRequest = CustomerRequest.builder()
             .name("Kamal Perera")
-            .email("kamal.perera@example.com")
             .dateOfBirth(LocalDate.of(1990, 5, 15))
             .nicNumber("901234567V")
             .mobileNumbers(Collections.emptyList())

@@ -7,7 +7,7 @@ const api = axios.create({
   timeout: 30000,
 });
 
-// Global response interceptor — surfaces error messages automatically
+// Surface backend error messages consistently in the UI.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -16,12 +16,10 @@ api.interceptors.response.use(
       error.response?.data?.errors?.join(', ') ||
       error.message ||
       'An unexpected error occurred';
-    toast.error(message);
+    toast.error(message, { toastId: `api-error:${message}` });
     return Promise.reject(error);
   }
 );
-
-// ---- Customer APIs ----
 
 export const customerApi = {
   getAll: (page = 0, size = 20, sortBy = 'name', direction = 'asc') =>
@@ -43,7 +41,10 @@ export const customerApi = {
     api.delete(`/customers/${id}`),
 };
 
-// ---- Bulk Upload APIs ----
+export const cityApi = {
+  search: (query) =>
+    api.get('/cities/search', { params: { q: query } }),
+};
 
 export const bulkApi = {
   upload: (file) => {
@@ -51,7 +52,7 @@ export const bulkApi = {
     formData.append('file', file);
     return api.post('/bulk/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000, // longer timeout for large file upload
+      timeout: 60000,
     });
   },
 

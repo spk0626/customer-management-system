@@ -8,7 +8,6 @@ import com.customermgmt.mapper.BulkUploadJobMapper;
 import com.customermgmt.repository.BulkUploadJobRepository;
 import com.customermgmt.repository.CustomerRepository;
 import com.customermgmt.service.BulkUploadService;
-import com.customermgmt.service.impl.BulkUploadAsyncStarter;
 import com.customermgmt.util.ExcelRowHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,6 @@ import org.apache.poi.xssf.eventusermodel.XSSFReader;
 import org.apache.poi.xssf.model.SharedStrings;
 import org.apache.poi.xssf.model.StylesTable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,11 +24,18 @@ import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
 import javax.xml.parsers.SAXParserFactory;
+import java.io.File;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -52,11 +57,12 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         validateFile(file);
 
         // Copy file bytes to memory once — avoids repeated stream reads
-        byte[] fileBytes;
+        File stagedFile;
         try {
-            fileBytes = file.getBytes();
+            stagedFile = File.createTempFile("bulk-upload-", getFileExtension(file.getOriginalFilename()));
+            file.transferTo(stagedFile);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to read uploaded file: " + e.getMessage());
+            throw new IllegalArgumentException("Failed to stage uploaded file: " + e.getMessage());
         }
 
         BulkUploadJob job = new BulkUploadJob();
@@ -65,7 +71,7 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         BulkUploadJob savedJob = jobRepository.save(job);
 
         // Kick off async — returns immediately to caller
-        asyncStarter.startProcessing(savedJob.getId(), fileBytes);
+        asyncStarter.startProcessing(savedJob.getId(), stagedFile.getAbsolutePath());
 
         return jobMapper.toResponse(savedJob);
     }
@@ -92,8 +98,9 @@ public class BulkUploadServiceImpl implements BulkUploadService {
      * Rows are collected into chunks and flushed to DB with JDBC batch inserts,
      * keeping transaction scope small and GC pressure low.
      */
-    public void processAsync(Long jobId, byte[] fileBytes) {
-        BulkUploadJob job = jobRepository.findById(jobId).orElseThrow();
+    public void processAsync(Long jobId, String tempFilePath) {
+        BulkUploadJob job = jobRepository.findById(jobId)
+            .orElseThrow(() -> new ResourceNotFoundException("BulkUploadJob", jobId));
         job.setStatus(BulkUploadJob.Status.PROCESSING);
         job.setStartedAt(LocalDateTime.now());
         jobRepository.save(job);
@@ -101,9 +108,10 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         List<String[]> chunk = new ArrayList<>(chunkSize);
         int[] counters = {0, 0, 0}; // [total, processed, failed]
         boolean[] headerSkipped = {false};
+        Path stagedFile = new File(tempFilePath).toPath();
 
-        try (InputStream is = new java.io.ByteArrayInputStream(fileBytes)) {
-            OPCPackage pkg = OPCPackage.open(is);
+        try (InputStream is = Files.newInputStream(stagedFile, StandardOpenOption.READ);
+             OPCPackage pkg = OPCPackage.open(is)) {
             XSSFReader reader = new XSSFReader(pkg);
             SharedStrings sst = reader.getSharedStringsTable();
             StylesTable styles = reader.getStylesTable();
@@ -126,8 +134,13 @@ public class BulkUploadServiceImpl implements BulkUploadService {
             });
 
             xmlReader.setContentHandler(handler);
-            InputStream sheet = reader.getSheetsData().next();
-            xmlReader.parse(new InputSource(sheet));
+            Iterator<InputStream> sheets = reader.getSheetsData();
+            if (!sheets.hasNext()) {
+                throw new IllegalArgumentException("The uploaded Excel file does not contain any sheets");
+            }
+            try (InputStream sheet = sheets.next()) {
+                xmlReader.parse(new InputSource(sheet));
+            }
 
             // Flush remaining rows
             if (!chunk.isEmpty()) {
@@ -141,6 +154,12 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         } catch (Exception e) {
             log.error("Bulk upload job {} failed: {}", jobId, e.getMessage(), e);
             markFailed(jobId, counters[0], counters[1], counters[2], e.getMessage());
+        } finally {
+            try {
+                Files.deleteIfExists(stagedFile);
+            } catch (Exception cleanupError) {
+                log.warn("Failed to delete staged bulk upload file {}: {}", stagedFile, cleanupError.getMessage());
+            }
         }
     }
 
@@ -165,6 +184,9 @@ public class BulkUploadServiceImpl implements BulkUploadService {
 
         // Single DB query to find all already-existing NICs in this chunk
         Set<String> existingNics = new HashSet<>(customerRepository.findExistingNics(nicsInChunk));
+        List<Customer> existingCustomers = customerRepository.findByNicNumberIn(nicsInChunk);
+        Map<String, Customer> existingByNic = new HashMap<>();
+        existingCustomers.forEach(customer -> existingByNic.put(customer.getNicNumber(), customer));
 
         int success = 0, failed = 0;
         for (String[] row : rows) {
@@ -179,11 +201,11 @@ public class BulkUploadServiceImpl implements BulkUploadService {
                 }
                 if (existingNics.contains(nic)) {
                     // Update existing customer — upsert behaviour
-                    customerRepository.findByNicNumber(nic).ifPresent(c -> {
-                        c.setName(name);
-                        c.setDateOfBirth(java.time.LocalDate.parse(dob));
-                        customerRepository.save(c);
-                    });
+                    Customer existingCustomer = existingByNic.get(nic);
+                    if (existingCustomer != null) {
+                        existingCustomer.setName(name);
+                        existingCustomer.setDateOfBirth(java.time.LocalDate.parse(dob));
+                    }
                     success++;
                     continue;
                 }
@@ -199,6 +221,10 @@ public class BulkUploadServiceImpl implements BulkUploadService {
                 log.warn("Failed to parse row: {}", e.getMessage());
                 failed++;
             }
+        }
+
+        if (!existingCustomers.isEmpty()) {
+            customerRepository.saveAll(existingCustomers);
         }
 
         // Batch insert the new customers
@@ -255,13 +281,21 @@ public class BulkUploadServiceImpl implements BulkUploadService {
             throw new IllegalArgumentException("File must not be empty");
         }
         String filename = file.getOriginalFilename();
-        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-            throw new IllegalArgumentException("Only Excel files (.xlsx, .xls) are accepted");
+        String lowerName = filename == null ? "" : filename.toLowerCase();
+        if (!lowerName.endsWith(".xlsx")) {
+            throw new IllegalArgumentException("Only Excel .xlsx files are accepted");
         }
     }
 
     private String safeGet(String[] row, int index) {
         if (row == null || index >= row.length || row[index] == null) return "";
         return row[index].trim();
+    }
+
+    private String getFileExtension(String filename) {
+        if (filename == null) return ".tmp";
+        int lastDot = filename.lastIndexOf('.');
+        if (lastDot < 0) return ".tmp";
+        return filename.substring(lastDot);
     }
 }

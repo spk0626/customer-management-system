@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS city (
     name        VARCHAR(100) NOT NULL,
     country_id  BIGINT      NOT NULL,
     PRIMARY KEY (id),
+    CONSTRAINT uq_city_name_country UNIQUE (name, country_id),
     INDEX idx_city_country (country_id),
     CONSTRAINT fk_city_country FOREIGN KEY (country_id)
         REFERENCES country(id) ON DELETE RESTRICT
@@ -69,16 +70,16 @@ CREATE TABLE IF NOT EXISTS customer_mobile (
 CREATE TABLE IF NOT EXISTS customer_address (
     id              BIGINT      NOT NULL AUTO_INCREMENT,
     customer_id     BIGINT      NOT NULL,
-    address_line1   VARCHAR(255),
+    address_line1   VARCHAR(255) NOT NULL,
     address_line2   VARCHAR(255),
-    city_id         BIGINT,
+    city_id         BIGINT      NOT NULL,
     is_primary      TINYINT(1)  NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     INDEX idx_address_customer (customer_id),
     CONSTRAINT fk_address_customer FOREIGN KEY (customer_id)
         REFERENCES customer(id) ON DELETE CASCADE,
     CONSTRAINT fk_address_city FOREIGN KEY (city_id)
-        REFERENCES city(id) ON DELETE SET NULL
+        REFERENCES city(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- -------------------------------------------------------------

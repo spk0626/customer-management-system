@@ -21,12 +21,11 @@ export default function CustomerListPageContent({ notify }) {
     customerApi.getAll().then(res => {
       setCustomers(res.data.data.content);
     }).catch(() => {
-      notify('Unable to load customers from the backend.', 'error');
       setCustomers([]);
     }).finally(() => {
       setLoading(false);
     });
-  }, [notify]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -38,21 +37,23 @@ export default function CustomerListPageContent({ notify }) {
       setModal({ ...modal, isOpen: false });
       loadData();
       notify(`The record for ${modal.name} has been permanently deleted.`, 'success');
-    } catch {
-      notify('Delete failed. Please try again.', 'error');
-    }
+    } catch {}
   };
+
+  const detailCountLabel = (count, singular, plural) => (
+    count ? `${count} ${count === 1 ? singular : plural}` : `No ${plural} listed`
+  );
 
   return (
     <div className="container" style={{ padding: '2rem 2rem 3rem', maxWidth: '1180px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em' }}>Member Directory</h1>
-          <p style={{ fontSize: '1rem', color: '#64748b', marginTop: '0.25rem' }}>Overview of all registered organization members.</p>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em' }}>Customer Directory</h1>
+          <p style={{ fontSize: '1rem', color: '#64748b', marginTop: '0.25rem' }}>Overview of all registered customers.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button onClick={() => navigate('/bulk-upload')} style={{ padding: '0.75rem 1.5rem', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>📥</span> Batch Import
+            <span>Excel</span> Batch Import
           </button>
           <button onClick={() => navigate('/customers/new')} style={{ background: '#059669', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '10px', border: 'none', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}>
             + New Registration
@@ -80,7 +81,7 @@ export default function CustomerListPageContent({ notify }) {
               <tr key={customer.id} style={{ borderBottom: '1px solid #f1f5f9', transition: '0.2s' }} className="table-row">
                 <td style={{ padding: '1.25rem 1.5rem' }}>
                   <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{customer.name}</div>
-                  <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{customer.email}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{customer.active ? 'Active customer' : 'Inactive customer'}</div>
                 </td>
                 <td style={{ padding: '1.25rem 1.5rem' }}>
                   <code style={{ fontSize: '0.9rem', color: '#065f46', background: '#ecfdf5', padding: '2px 8px', borderRadius: '999px', fontWeight: 700 }}>{customer.nicNumber}</code>
@@ -90,9 +91,9 @@ export default function CustomerListPageContent({ notify }) {
                 </td>
                 <td style={{ padding: '1.25rem 1.5rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', color: '#475569', fontSize: '0.85rem' }}>
-                    <span>{customer.mobileNumbers?.length ? `${customer.mobileNumbers.length} mobile${customer.mobileNumbers.length > 1 ? 's' : ''}` : 'No mobiles listed'}</span>
-                    <span>{customer.addresses?.length ? `${customer.addresses.length} address${customer.addresses.length > 1 ? 'es' : ''}` : 'No addresses listed'}</span>
-                    <span>{customer.familyMembers?.length ? `${customer.familyMembers.length} family member${customer.familyMembers.length > 1 ? 's' : ''}` : 'No family members listed'}</span>
+                    <span>{detailCountLabel(customer.mobileCount ?? customer.mobileNumbers?.length ?? 0, 'mobile', 'mobiles')}</span>
+                    <span>{detailCountLabel(customer.addressCount ?? customer.addresses?.length ?? 0, 'address', 'addresses')}</span>
+                    <span>{detailCountLabel(customer.familyMemberCount ?? customer.familyMembers?.length ?? 0, 'family member', 'family members')}</span>
                   </div>
                 </td>
                 <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>

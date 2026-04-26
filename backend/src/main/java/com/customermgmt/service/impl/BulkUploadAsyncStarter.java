@@ -12,7 +12,7 @@ public class BulkUploadAsyncStarter {
     private final ObjectProvider<BulkUploadServiceImpl> bulkUploadServiceProvider;
 
     @Async("bulkTaskExecutor")
-    public void startProcessing(Long jobId, byte[] fileBytes) {
-        bulkUploadServiceProvider.getObject().processAsync(jobId, fileBytes);
+    public void startProcessing(Long jobId, String tempFilePath) {
+        bulkUploadServiceProvider.getObject().processAsync(jobId, tempFilePath);
     }
 }
