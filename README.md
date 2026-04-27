@@ -2,6 +2,18 @@
 
 Small full-stack customer management application built to match the assignment requirements.
 
+## Screenshots
+ 
+| Customer List | Customer Form |
+|---|---|
+| ![Customer List](docs/screenshots/CustomersListPage.jpg) | ![Customer Form](docs/screenshots/CustomersFormPage.jpg) |
+ 
+| Customer Detail | Bulk Upload |
+|---|---|
+| ![Customer Detail](docs/screenshots/CustomerDetailsPage.jpg) | ![Bulk Upload](docs/screenshots/BulkUploadPage.jpg) |
+ 
+---
+
 ## Overview
 
 - Java 8
@@ -238,5 +250,3 @@ npm test -- --watchAll=false --runInBand
 - Existing NIC values are updated
 - New NIC values are inserted
 - Processing is asynchronous and returns a job ID immediately
-
-## Notes

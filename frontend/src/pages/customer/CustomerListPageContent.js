@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { customerApi } from '../../services/api';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
+const DEFAULT_PAGE_SIZE = 10;
+
 const formatDate = (value) => {
   if (!value) return 'Not set';
   const date = new Date(value);
@@ -14,35 +16,88 @@ export default function CustomerListPageContent({ notify }) {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ isOpen: false, id: null, name: '' });
+  const [pageState, setPageState] = useState({
+    page: 0,
+    size: DEFAULT_PAGE_SIZE,
+    totalElements: 0,
+    totalPages: 0,
+    last: true,
+  });
   const navigate = useNavigate();
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((requestedPage = pageState.page) => {
     setLoading(true);
-    customerApi.getAll().then(res => {
-      setCustomers(res.data.data.content);
+    customerApi.getAll(requestedPage, pageState.size).then(res => {
+      const payload = res.data.data;
+      const nextPage = payload.totalPages > 0 && requestedPage >= payload.totalPages
+        ? payload.totalPages - 1
+        : payload.page;
+
+      if (payload.totalPages > 0 && requestedPage >= payload.totalPages && nextPage !== requestedPage) {
+        loadData(nextPage);
+        return;
+      }
+
+      setCustomers(payload.content);
+      setPageState({
+        page: payload.page,
+        size: payload.size,
+        totalElements: payload.totalElements,
+        totalPages: payload.totalPages,
+        last: payload.last,
+      });
     }).catch(() => {
       setCustomers([]);
+      setPageState(current => ({
+        ...current,
+        totalElements: 0,
+        totalPages: 0,
+        last: true,
+      }));
     }).finally(() => {
       setLoading(false);
     });
-  }, []);
+  }, [pageState.page, pageState.size]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadData(pageState.page);
+  }, [loadData, pageState.page]);
 
   const confirmDelete = async () => {
     try {
       await customerApi.delete(modal.id);
       setModal({ ...modal, isOpen: false });
-      loadData();
       notify(`The record for ${modal.name} has been permanently deleted.`, 'success');
+      loadData(pageState.page);
     } catch {}
   };
 
   const detailCountLabel = (count, singular, plural) => (
     count ? `${count} ${count === 1 ? singular : plural}` : `No ${plural} listed`
   );
+
+  const goToPage = (nextPage) => {
+    if (nextPage === pageState.page || nextPage < 0 || (pageState.totalPages > 0 && nextPage >= pageState.totalPages)) {
+      return;
+    }
+    setPageState(current => ({ ...current, page: nextPage }));
+  };
+
+  const pageStart = pageState.totalElements === 0 ? 0 : (pageState.page * pageState.size) + 1;
+  const pageEnd = pageState.totalElements === 0
+    ? 0
+    : Math.min((pageState.page + 1) * pageState.size, pageState.totalElements);
+
+  const pagerButtonStyle = (disabled) => ({
+    padding: '0.65rem 0.95rem',
+    borderRadius: '10px',
+    border: '1px solid #dbe7e3',
+    background: disabled ? '#f8fafc' : 'white',
+    color: disabled ? '#94a3b8' : '#334155',
+    fontWeight: 700,
+    cursor: disabled ? 'default' : 'pointer',
+    minWidth: '52px',
+  });
 
   return (
     <div className="container" style={{ padding: '2rem 2rem 3rem', maxWidth: '1180px', margin: '0 auto' }}>
@@ -51,7 +106,7 @@ export default function CustomerListPageContent({ notify }) {
           <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em' }}>Customer Directory</h1>
           <p style={{ fontSize: '1rem', color: '#64748b', marginTop: '0.25rem' }}>Overview of all registered customers.</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/bulk-upload')} style={{ padding: '0.75rem 1.5rem', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>Excel</span> Batch Import
           </button>
@@ -77,6 +132,10 @@ export default function CustomerListPageContent({ notify }) {
               <tr>
                 <td colSpan="5" style={{ textAlign: 'center', padding: '5rem', color: '#94a3b8' }}>Synchronizing data...</td>
               </tr>
+            ) : customers.length === 0 ? (
+              <tr>
+                <td colSpan="5" style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>No customers found on this page.</td>
+              </tr>
             ) : customers.map(customer => (
               <tr key={customer.id} style={{ borderBottom: '1px solid #f1f5f9', transition: '0.2s' }} className="table-row">
                 <td style={{ padding: '1.25rem 1.5rem' }}>
@@ -97,7 +156,7 @@ export default function CustomerListPageContent({ notify }) {
                   </div>
                 </td>
                 <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                     <button onClick={() => navigate(`/customers/${customer.id}`)} style={{ padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 700, color: '#334155', fontSize: '0.85rem' }}>View</button>
                     <button onClick={() => navigate(`/customers/${customer.id}/edit`)} style={{ padding: '0.5rem 1rem', borderRadius: '999px', border: '1px solid #a7f3d0', background: '#f0fdf4', cursor: 'pointer', fontWeight: 700, color: '#047857', fontSize: '0.85rem' }}>Edit</button>
                     <button
@@ -112,6 +171,21 @@ export default function CustomerListPageContent({ notify }) {
             ))}
           </tbody>
         </table>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', background: '#fcfefd', flexWrap: 'wrap' }}>
+          <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>
+            Showing {pageStart}-{pageEnd} of {pageState.totalElements}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span style={{ color: '#334155', fontSize: '0.9rem', fontWeight: 700 }}>
+              Page {pageState.totalPages === 0 ? 0 : pageState.page + 1} of {pageState.totalPages}
+            </span>
+            <button type="button" onClick={() => goToPage(0)} disabled={loading || pageState.page === 0 || pageState.totalPages === 0} style={pagerButtonStyle(loading || pageState.page === 0 || pageState.totalPages === 0)}>First</button>
+            <button type="button" onClick={() => goToPage(pageState.page - 1)} disabled={loading || pageState.page === 0} style={pagerButtonStyle(loading || pageState.page === 0)}>Prev</button>
+            <button type="button" onClick={() => goToPage(pageState.page + 1)} disabled={loading || pageState.last || pageState.totalPages === 0} style={pagerButtonStyle(loading || pageState.last || pageState.totalPages === 0)}>Next</button>
+            <button type="button" onClick={() => goToPage(pageState.totalPages - 1)} disabled={loading || pageState.last || pageState.totalPages === 0} style={pagerButtonStyle(loading || pageState.last || pageState.totalPages === 0)}>Last</button>
+          </div>
+        </div>
       </div>
 
       <ConfirmModal
