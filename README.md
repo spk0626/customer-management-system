@@ -250,3 +250,15 @@ npm test -- --watchAll=false --runInBand
 - Existing NIC values are updated
 - New NIC values are inserted
 - Processing is asynchronous and returns a job ID immediately
+
+## Key Design Decisions
+
+**Soft delete** — Customers are deactivated (`is_active = 0`) rather than hard-deleted, preserving referential integrity for family member relationships.
+
+**SAX over DOM for Excel parsing** — `XSSFWorkbook` loads the entire file into heap. At 1M rows that can exceed 1GB. SAX fires events row-by-row, keeping memory usage constant regardless of file size.
+ 
+**Two-query fetch for customer detail** — JPA throws `MultipleBagFetchException` when JOIN FETCHing two `List` collections in one query. The solution fetches addresses and mobiles in one query, then family members in a second. Hibernate's L1 cache merges both results on the same entity instance — no extra DB round-trip.
+ 
+**Async job tracking** — Bulk uploads return a job ID immediately. Processing runs in a dedicated thread pool. Each chunk commits in its own transaction so progress is visible while processing continues.
+ 
+**Separate `BulkChunkProcessor` bean** — `@Async` and `@Transactional(REQUIRES_NEW)` on the same class cause self-invocation to bypass the Spring proxy, making the inner transactions ineffective. Splitting chunk writes into a separate `@Service` ensures every call goes through the proxy correctly.
